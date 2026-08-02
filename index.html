@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DVL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/128/three.min.js"></script>
+
+<!-- Firebase -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, getDocs, addDoc, query, orderBy, serverTimestamp, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // 🔧 حط بيانات مشروعك هنا من إعدادات Firebase (Project settings → Your apps)
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_ozr_jD9ePe2E0mZVYhtHZ8RjvQ-KcUw",
+    authDomain: "dvl-gang.firebaseapp.com",
+    projectId: "dvl-gang",
+    storageBucket: "dvl-gang.firebasestorage.app",
+    messagingSenderId: "924186560493",
+    appId: "1:924186560493:web:618de8a145cf27c1a509e4"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window.__db = db;
+  window.__fs = { collection, getDocs, addDoc, query, orderBy, serverTimestamp };
+
+  document.addEventListener('DOMContentLoaded', initFirebaseContent);
+
+  async function initFirebaseContent(){
+    // leader card loads first and independently so it never waits on other sections
+    loadSpecialLeader().catch(e=>console.warn('loadSpecialLeader failed', e));
+
+    const tasks = [loadMembers, loadNews, loadTikTok, loadGallery, loadStatsSettings, loadAboutSettings, loadSocialSettings];
+    await Promise.allSettled(tasks.map(task =>
+      task().catch(e => console.warn(task.name + ' failed', e))
+    ));
+    wireJoinForm();
+    wireShareButtons();
+  }
+
+  function wireShareButtons(){
+    const url = window.location.href;
+    const copyBtn = document.getElementById('share-copy');
+    if(copyBtn){
+      copyBtn.addEventListener('click', async ()=>{
+        try{
+          await navigator.clipboard.writeText(url);
+          const original = copyBtn.textContent;
+          copyBtn.textContent = 'تم النسخ ✓';
+          setTimeout(()=> copyBtn.textContent = original, 1800);
+        }catch(e){}
+      });
+    }
+  }
+
+  const roleColors = {
+    'القائد':'#f0a73a', 'النائب':'#7cf7c4', 'عضو موثوق':'#12b76a', 'متدرب':'#8b8d93'
+  };
+  function roleColor(role){
+    return roleColors[role] || '#12b76a';
+  }
+
+  async function loadMembers(){
+    const el = document.getElementById('roster-grid');
+    const snap = await getDocs(query(collection(db,'members'), orderBy('order','asc')));
+    if(snap.empty) return;
+    el.innerHTML = '';
+    snap.forEach(doc=>{
+      const m = doc.data();
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="role mono"><span class="dot" style="background:${roleColor(m.role)}"></span>${m.role||''}</div>
+        <div class="name">${m.name||''}</div>
+        <div class="meta mono">${m.meta||''}</div>`;
+      card.addEventListener('click', ()=> window.openMemberModal(m));
+      el.appendChild(card);
+    });
+    document.getElementById('stat-members').textContent = snap.size;
+  }
+
+  async function loadNews(){
+    const el = document.getElementById('news-feed');
+    const snap = await getDocs(query(collection(db,'news'), orderBy('createdAt','desc')));
+    if(snap.empty) return;
+    el.innerHTML = '';
+    let achievementCount = 0;
+    snap.forEach(doc=>{
+      const n = doc.data();
+      if((n.tag||'').includes('إنجاز')) achievementCount++;
+      el.insertAdjacentHTML('beforeend', `
+        <div class="feed-item">
+          <div class="date mono">${n.date||''}</div>
+          <div>
+            <span class="tag">${n.tag||'خبر'}</span>
+            <h3>${n.title||''}</h3>
+            <p>${n.body||''}</p>
+          </div>
+        </div>`);
+    });
+    document.getElementById('stat-achievements').textContent = achievementCount;
+  }
+
+  async function loadTikTok(){
+    const el = document.getElementById('tiktok-grid');
+    const snap = await getDocs(collection(db,'tiktok'));
+    if(snap.empty) return;
+    el.innerHTML = '';
+    snap.forEach(doc=>{
+      const t = doc.data();
+      el.insertAdjacentHTML('beforeend', `
+        <a href="${t.url||'#'}" class="tiktok-card" target="_blank" rel="noopener">
+          <div class="tiktok-icon"><svg viewBox="0 0 24 24"><path d="M16.5 3c.3 1.9 1.6 3.4 3.5 3.7v2.6c-1.3 0-2.5-.4-3.5-1.1v6.6c0 3.1-2.5 5.2-5.3 5.2S5.9 17.9 5.9 14.8s2.5-5.2 5.3-5.2c.4 0 .8 0 1.2.1v2.7c-.4-.1-.8-.2-1.2-.2-1.5 0-2.7 1.2-2.7 2.7s1.2 2.7 2.7 2.7 2.8-1.1 2.8-2.7V3h2.5z"/></svg></div>
+          <div>
+            <div class="tname">${t.name||''}</div>
+            <div class="thandle mono">${t.handle||''}</div>
+          </div>
+          <div class="tarrow">↗</div>
+        </a>`);
+    });
+  }
+
+  async function loadGallery(){
+    const el = document.getElementById('gallery-grid');
+    const snap = await getDocs(collection(db,'gallery'));
+    if(snap.empty) return;
+    el.innerHTML = '';
+    snap.forEach(d=>{
+      const g = d.data();
+      const item = document.createElement('div');
+      item.className = 'gallery-item';
+      const media = g.type === 'video'
+        ? `<video src="${g.url}" muted loop autoplay playsinline></video>`
+        : `<img src="${g.url}" alt="${g.caption||''}" loading="lazy">`;
+      item.innerHTML = media + (g.caption ? `<div class="cap">${g.caption}</div>` : '');
+      el.appendChild(item);
+    });
+  }
+
+  async function loadStatsSettings(){
+    const snap = await getDoc(doc(db,'settings','stats'));
+    if(!snap.exists()) return;
+    const s = snap.data();
+    const seasonsEl = document.getElementById('stat-seasons');
+    const ghEl = document.getElementById('stat-ganghouses');
+    const membersEl = document.getElementById('stat-members');
+    const achEl = document.getElementById('stat-achievements');
+    if(s.seasons != null && seasonsEl) seasonsEl.textContent = s.seasons;
+    if(s.ganghouses != null && ghEl) ghEl.textContent = s.ganghouses;
+    if(s.members != null && membersEl) membersEl.textContent = s.members;
+    if(s.achievements != null && achEl) achEl.textContent = s.achievements;
+  }
+
+  async function loadAboutSettings(){
+    const snap = await getDoc(doc(db,'settings','about'));
+    if(!snap.exists()) return;
+    const a = snap.data();
+    if(a.p1) document.getElementById('about-p1').textContent = a.p1;
+    if(a.p2) document.getElementById('about-p2').textContent = a.p2;
+    if(a.founded) document.getElementById('about-founded').textContent = a.founded;
+    if(a.region) document.getElementById('about-region').textContent = a.region;
+    if(a.joinSystem) document.getElementById('about-joinsystem').textContent = a.joinSystem;
+  }
+
+  async function loadSocialSettings(){
+    const snap = await getDoc(doc(db,'settings','social'));
+    if(!snap.exists()) return;
+    const s = snap.data();
+    const tiktokEl = document.getElementById('share-tiktok');
+    const discordEl = document.getElementById('share-discord');
+    if(s.tiktok && tiktokEl) tiktokEl.href = s.tiktok;
+    if(s.discord && discordEl) discordEl.href = s.discord;
+  }
+
+  async function loadSpecialLeader(){
+    const snap = await getDoc(doc(db,'special','khalid'));
+    if(!snap.exists()) return;
+    const data = snap.data();
+    const card = document.getElementById('leader-card');
+    const nameEl = document.getElementById('lc-name');
+    if(!card || !nameEl) return;
+    nameEl.textContent = data.name || 'خالد';
+    card.style.display = 'block';
+    card.onclick = ()=>{
+      const audio = document.getElementById('special-audio');
+      if(data.audioUrl){
+        audio.src = data.audioUrl;
+        audio.volume = 0.5;
+        audio.play().catch(()=>{});
+      }
+      window.triggerLeaderIntro(data);
+    };
+  }
+
+  function wireJoinForm(){
+    const form = document.getElementById('join-form');
+    if(!form) return;
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const statusEl = document.getElementById('join-status');
+      const data = {
+        name: form.name.value.trim(),
+        tiktok: form.tiktok.value.trim(),
+        message: form.message.value.trim(),
+        createdAt: serverTimestamp()
+      };
+      if(!data.name){ return; }
+      try{
+        await addDoc(collection(db,'applications'), data);
+        statusEl.textContent = 'تم إرسال طلبك بنجاح — بننتظر ردنا عليك قريب.';
+        statusEl.style.color = 'var(--mint)';
+        form.reset();
+      }catch(err){
+        statusEl.textContent = 'صار خطأ بالإرسال — تأكد من ربط Firebase.';
+        statusEl.style.color = '#e08a8a';
+      }
+    });
+  }
+</script>
+<style>
+  :root{
+    --void:#060907;
+    --panel:#0c1310;
+    --panel-2:#111c17;
+    --emerald:#12b76a;
+    --mint:#7cf7c4;
+    --deep:#053b26;
+    --text:#dfe8e3;
+    --muted:#7c8c84;
+    --line: rgba(223,232,227,0.08);
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--void);
+    color:var(--text);
+    font-family:'Tajawal', sans-serif;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace; letter-spacing:0.03em;}
+  .display{font-family:'Syne', sans-serif;}
+
+  ::selection{ background:var(--emerald); color:var(--void); }
+
+  nav{
+    position:fixed; top:0; inset-inline:0; z-index:100;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:22px 40px;
+    backdrop-filter:blur(10px);
+    background:linear-gradient(var(--void), transparent);
+  }
+  nav .logo{ font-family:'Syne',sans-serif; font-weight:800; font-size:1.3rem; letter-spacing:0.05em; display:flex; align-items:center; gap:10px; }
+  .nav-logo-img{ height:34px; width:auto; display:block; filter: drop-shadow(0 0 6px rgba(18,183,106,0.5)); }
+  nav .logo span{ color:var(--emerald); }
+  nav ul{ display:flex; gap:34px; list-style:none; }
+  nav a{ color:var(--muted); text-decoration:none; font-size:14px; transition:color .2s; }
+  nav a:hover{ color:var(--mint); }
+  .nav-toggle{ display:none; background:none; border:none; color:var(--text); font-size:24px; cursor:pointer; padding:4px; }
+  @media (max-width:700px){
+    nav ul{
+      position:fixed; top:0; left:0; right:0;
+      flex-direction:column; align-items:flex-start; gap:0;
+      background:var(--void); border-bottom:1px solid var(--line);
+      padding:80px 30px 24px;
+      transform:translateY(-100%);
+      transition:transform .3s ease;
+      z-index:99;
+    }
+    nav ul.open{ transform:translateY(0); }
+    nav ul li{ width:100%; padding:14px 0; border-bottom:1px solid var(--line); }
+    nav ul li a{ font-size:15px; display:block; }
+    .nav-toggle{ display:block; }
+  }
+
+  header{
+    min-height:100vh;
+    position:relative;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+  }
+  #hero-canvas{
+    position:absolute; inset:0;
+    z-index:1;
+    opacity:0.9;
+  }
+  header::after{
+    content:"";
+    position:absolute; inset:0;
+    background:radial-gradient(ellipse at 50% 50%, transparent 0%, var(--void) 78%);
+    z-index:2;
+    pointer-events:none;
+  }
+  .hero-content{
+    position:relative; z-index:3;
+    text-align:center;
+    padding:0 24px;
+  }
+  .eyebrow-line{
+    display:inline-flex; align-items:center; gap:10px;
+    color:var(--mint); font-size:12px; letter-spacing:0.3em;
+    margin-bottom:28px;
+  }
+  .eyebrow-line::before, .eyebrow-line::after{
+    content:""; width:24px; height:1px; background:var(--emerald);
+  }
+  .hero-brand-row{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap: clamp(12px, 3vw, 28px);
+    flex-wrap:wrap;
+  }
+  .hero-logo-img{
+    height: clamp(64px, 10vw, 140px);
+    width:auto;
+    filter: drop-shadow(0 0 24px rgba(18,183,106,0.45));
+  }
+  h1.brand{
+    font-family:'Syne', sans-serif;
+    font-weight:800;
+    font-size:clamp(4.5rem, 16vw, 11rem);
+    line-height:0.9;
+    background:linear-gradient(160deg, var(--mint) 0%, var(--emerald) 45%, var(--deep) 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    color:transparent;
+    letter-spacing:0.02em;
+  }
+  .hero-sub{
+    margin-top:26px;
+    color:var(--muted);
+    font-size:1.05rem;
+    max-width:520px;
+    margin-inline:auto;
+    line-height:1.8;
+  }
+  .scroll-cue{
+    position:absolute; bottom:44px; left:50%; transform:translateX(-50%);
+    z-index:3;
+    color:var(--muted); font-size:11px; letter-spacing:0.25em;
+  }
+
+  section{
+    max-width:1120px;
+    margin:0 auto;
+    padding:150px 24px;
+    position:relative;
+  }
+  .eyebrow{
+    color:var(--emerald); font-size:12px; letter-spacing:0.3em;
+    margin-bottom:16px; display:flex; align-items:center; gap:14px;
+  }
+  .eyebrow::after{ content:""; flex:1; height:1px; background:var(--line); }
+  h2.section-title{
+    font-family:'Syne', sans-serif;
+    font-weight:700;
+    font-size:clamp(2.2rem, 5vw, 3.6rem);
+    margin-bottom:56px;
+  }
+
+  /* stats strip */
+  .stats{
+    display:grid; grid-template-columns:repeat(4,1fr);
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+  }
+  .stat{ padding:36px 20px; text-align:center; border-inline-start:1px solid var(--line); }
+  .stat:first-child{ border-inline-start:none; }
+  .stat .num{ font-family:'Syne',sans-serif; font-weight:800; font-size:2.6rem; color:var(--mint); }
+  .stat .lbl{ color:var(--muted); font-size:12px; letter-spacing:0.15em; margin-top:8px; }
+  @media (max-width:640px){
+    .stats{ grid-template-columns:repeat(2,1fr); }
+    .stat{ border-inline-start:none; border-bottom:1px solid var(--line);}
+    .rule{ grid-template-columns:50px 1fr; }
+    .feed-item{ grid-template-columns:1fr; gap:6px; }
+    .about-grid{ grid-template-columns:1fr; }
+    .join{ padding:44px 22px; }
+    .modal-box{ max-width:100%; margin:0 10px; }
+    .modal-photo{ height:200px; }
+    nav{ padding:18px 20px; }
+  }
+
+  /* roster */
+  .roster{ display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); }
+  .card{
+    background:var(--panel);
+    padding:32px 26px;
+    position:relative;
+    transition:background .25s ease, transform .25s ease;
+    cursor:pointer;
+  }
+  .card:hover{ background:var(--panel-2); transform:translateY(-3px); }
+  .card::before{
+    content:""; position:absolute; top:0; right:0; width:36px; height:3px;
+    background:linear-gradient(90deg, var(--emerald), var(--mint));
+  }
+  .card .role{ color:var(--emerald); font-size:11px; letter-spacing:0.2em; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+  .card .role .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .card .name{ font-size:1.35rem; font-weight:500; margin-bottom:6px; font-family:'Syne',sans-serif; }
+  .card .meta{ color:var(--muted); font-size:13px; }
+
+  /* featured leader card — VIP ID badge style */
+  .leader-card{
+    position:relative;
+    background: linear-gradient(135deg, #1a1205 0%, var(--panel) 55%, #120d02 100%);
+    border: 1px solid rgba(240,167,58,0.5);
+    border-radius: 12px;
+    padding: 26px 30px;
+    margin-bottom: 40px;
+    cursor: pointer;
+    overflow: hidden;
+    display:flex;
+    align-items:center;
+    gap:20px;
+    transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+    box-shadow: 0 0 0 rgba(240,167,58,0);
+  }
+  .leader-card:hover{
+    transform: translateY(-3px);
+    border-color: #f0a73a;
+    box-shadow: 0 12px 40px rgba(240,167,58,0.15);
+  }
+  .leader-card::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:url('dvl-logo.png');
+    background-repeat:no-repeat;
+    background-position: left -20px center;
+    background-size: 130px;
+    opacity:0.08;
+    filter: grayscale(1) brightness(3);
+    pointer-events:none;
+  }
+  .leader-card .lc-icon{
+    flex-shrink:0;
+    width:56px; height:56px;
+    border-radius:50%;
+    background: conic-gradient(from 0deg, #f0a73a, var(--mint), #f0a73a);
+    display:flex; align-items:center; justify-content:center;
+    position:relative; z-index:1;
+  }
+  .leader-card .lc-icon span{
+    width:48px; height:48px; border-radius:50%;
+    background:var(--panel);
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px;
+  }
+  .leader-card .lc-text{ position:relative; z-index:1; }
+  .leader-card .lc-badge{
+    color:#f0a73a; font-size:11px; letter-spacing:0.25em;
+    font-family:'IBM Plex Mono',monospace; margin-bottom:6px;
+  }
+  .leader-card .lc-name{
+    font-family:'Syne',sans-serif; font-weight:700; font-size:1.5rem;
+    background:linear-gradient(160deg, #ffd98a, #f0a73a);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    margin-bottom:4px;
+  }
+  .leader-card .lc-sub{ color:var(--muted); font-size:12px; }
+  .leader-card .lc-arrow{
+    margin-inline-start:auto; color:#f0a73a; font-size:20px; position:relative; z-index:1;
+  }
+
+  /* cinematic intro overlay — calm typewriter reveal */
+  .cinematic-overlay{
+    position:fixed; inset:0; z-index:999;
+    background:#000;
+    display:none;
+    align-items:center; justify-content:center;
+    text-align:center;
+    padding:24px;
+    opacity:0;
+    transition: opacity 0.6s ease;
+  }
+  .cinematic-overlay.show{ display:flex; opacity:1; }
+  .cinematic-overlay.fade-out{ opacity:0; }
+  .cinematic-text{
+    font-family:'Syne', sans-serif;
+    font-weight:700;
+    color:#f2f2f2;
+    font-size: clamp(1.5rem, 5.5vw, 3rem);
+    text-shadow: 0 0 20px rgba(240,167,58,0.25);
+    direction: ltr;
+    letter-spacing:0.02em;
+    min-height: 1.4em;
+  }
+  .cinematic-text .cursor{
+    display:inline-block;
+    width:2px; height:1em;
+    background:#f0a73a;
+    margin-inline-start:4px;
+    vertical-align:-0.15em;
+    animation: cursorBlink 0.8s steps(1) infinite;
+  }
+  @keyframes cursorBlink{ 50%{ opacity:0; } }
+
+  /* full-screen special leader profile */
+  .special-overlay{
+    position:fixed; inset:0; z-index:998;
+    background:
+      radial-gradient(ellipse at 50% 30%, rgba(240,167,58,0.28), transparent 55%),
+      radial-gradient(ellipse at 50% 90%, rgba(240,167,58,0.12), transparent 60%),
+      linear-gradient(180deg, #0d0904 0%, var(--void) 55%, #0d0904 100%);
+    box-shadow: inset 0 0 140px rgba(240,167,58,0.25);
+    display:none;
+    align-items:center; justify-content:center;
+    padding:40px 24px;
+    opacity:0;
+    transform:scale(0.97);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+    overflow-y:auto;
+  }
+  .special-overlay.open{ display:flex; opacity:1; transform:scale(1); }
+  .special-overlay::after{
+    content:"";
+    position:absolute; inset:14px;
+    border:1px solid rgba(240,167,58,0.35);
+    pointer-events:none;
+  }
+  .special-overlay::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image:url('dvl-logo.png');
+    background-repeat:no-repeat;
+    background-position:center;
+    background-size:60%;
+    opacity:0.05;
+    filter: grayscale(1) brightness(3);
+    pointer-events:none;
+  }
+  .special-close{
+    position:absolute; top:26px; left:26px; z-index:2;
+    width:42px; height:42px; border-radius:50%;
+    background:rgba(255,255,255,0.05); border:1px solid rgba(240,167,58,0.3);
+    color:var(--text); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:18px;
+  }
+  .special-content{
+    position:relative; z-index:1;
+    text-align:center;
+    max-width:560px;
+  }
+  .special-photo-ring{
+    width:180px; height:180px;
+    border-radius:50%;
+    margin:0 auto 28px;
+    padding:5px;
+    background: conic-gradient(from 0deg, #f0a73a, var(--mint), #f0a73a);
+    animation: ringSpin 6s linear infinite;
+  }
+  @keyframes ringSpin{ to{ transform:rotate(360deg); } }
+  .special-photo{
+    width:100%; height:100%;
+    border-radius:50%;
+    background:var(--panel) center/cover no-repeat;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--muted); font-size:12px;
+    border:3px solid var(--void);
+  }
+  .special-badge{
+    display:inline-block;
+    color:#f0a73a; font-size:12px; letter-spacing:0.3em;
+    border:1px solid rgba(240,167,58,0.4);
+    padding:6px 18px; border-radius:20px;
+    margin-bottom:18px;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  .special-name{
+    font-family:'Syne',sans-serif;
+    font-weight:800;
+    font-size:clamp(2.2rem, 7vw, 3.6rem);
+    background:linear-gradient(160deg, #ffd98a 0%, #f0a73a 50%, #a86a1a 100%);
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+    margin-bottom:8px;
+  }
+  .special-gamename{
+    color:var(--mint); font-family:'IBM Plex Mono',monospace; font-size:13px; margin-bottom:24px;
+  }
+  .special-bio{
+    color:var(--muted); font-size:15px; line-height:1.9;
+  }
+  .special-info{
+    margin-top:24px;
+    padding-top:20px;
+    border-top:1px solid rgba(240,167,58,0.25);
+    color:#e8d5a8;
+    font-size:14px;
+    line-height:2;
+    white-space:pre-line;
+    text-align:start;
+  }
+  .special-info:empty{ display:none; border-top:none; margin-top:0; padding-top:0; }
+
+  .modal-overlay{
+    position:fixed; inset:0; z-index:200;
+    background:rgba(6,9,7,0.85);
+    backdrop-filter:blur(6px);
+    display:none;
+    align-items:center; justify-content:center;
+    padding:24px;
+  }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    max-width:440px; width:100%;
+    padding:0;
+    overflow:hidden;
+    position:relative;
+    animation:modalIn .25s ease;
+  }
+  @keyframes modalIn{ from{ opacity:0; transform:translateY(14px) scale(0.98);} to{ opacity:1; transform:translateY(0) scale(1);} }
+  .modal-photo{
+    width:100%; height:260px;
+    background:linear-gradient(160deg, var(--panel-2), var(--deep)) center/cover no-repeat;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--muted); font-size:13px;
+  }
+  .modal-close{
+    position:absolute; top:14px; left:14px;
+    width:34px; height:34px; border-radius:50%;
+    background:rgba(6,9,7,0.6); border:1px solid var(--line);
+    color:var(--text); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:16px; z-index:2;
+  }
+  .modal-body{ padding:26px 28px 30px; }
+  .modal-body .m-role{ color:var(--emerald); font-size:11px; letter-spacing:0.2em; margin-bottom:8px; }
+  .modal-body .m-name{ font-family:'Syne',sans-serif; font-weight:700; font-size:1.6rem; margin-bottom:4px; }
+  .modal-body .m-gamename{ color:var(--mint); font-size:13px; margin-bottom:16px; font-family:'IBM Plex Mono',monospace; }
+  .modal-body .m-bio{ color:var(--muted); font-size:14px; line-height:1.8; }
+
+  /* rules */
+  .rules{ border-top:1px solid var(--line); }
+  .rule{
+    display:grid; grid-template-columns:60px 1fr; gap:26px;
+    padding:28px 0; border-bottom:1px solid var(--line); align-items:baseline;
+  }
+  .rule .code{ color:var(--mint); font-size:14px; }
+  .rule .txt{ font-size:1.05rem; line-height:1.7; }
+  .rule .txt b{ color:var(--mint); font-weight:600; }
+
+  /* feed */
+  .feed-item{
+    display:grid; grid-template-columns:140px 1fr; gap:28px;
+    padding:30px 0; border-bottom:1px solid var(--line);
+  }
+  .feed-item:first-child{ border-top:1px solid var(--line); }
+  .feed-item .date{ color:var(--muted); font-size:13px; }
+  .feed-item .tag{
+    display:inline-block; background:linear-gradient(90deg, var(--emerald), var(--mint));
+    color:var(--void); font-size:11px; letter-spacing:0.1em; font-weight:600;
+    padding:4px 12px; border-radius:20px; margin-bottom:12px;
+  }
+  .feed-item h3{ font-family:'Syne',sans-serif; font-weight:600; font-size:1.25rem; margin-bottom:8px; }
+  .feed-item p{ color:var(--muted); font-size:14px; line-height:1.7; }
+
+  /* join */
+  .join{
+    background:linear-gradient(145deg, var(--panel-2), var(--panel));
+    border:1px solid var(--line);
+    padding:70px 40px;
+    text-align:center;
+    border-radius:6px;
+    position:relative;
+    overflow:hidden;
+  }
+  .join::before{
+    content:""; position:absolute; width:400px; height:400px;
+    background:radial-gradient(circle, rgba(18,183,106,0.25), transparent 70%);
+    top:-150px; right:-100px;
+  }
+  .join h2{ font-family:'Syne',sans-serif; font-weight:700; font-size:2.4rem; margin-bottom:18px; position:relative; }
+  .join p{ color:var(--muted); max-width:480px; margin:0 auto 34px; position:relative; }
+  .btn{
+    position:relative;
+    display:inline-block;
+    background:linear-gradient(90deg, var(--emerald), var(--mint));
+    color:var(--void);
+    font-weight:700;
+    padding:17px 44px;
+    font-size:14px; letter-spacing:0.1em;
+    text-decoration:none;
+    border-radius:4px;
+    transition:transform .2s ease, box-shadow .2s ease;
+  }
+  .btn:hover{ transform:translateY(-2px); box-shadow:0 10px 30px rgba(18,183,106,0.35); }
+
+  .share-row{ display:flex; gap:10px; justify-content:center; margin-top:22px; flex-wrap:wrap; }
+  .share-btn{
+    display:flex; align-items:center; gap:8px;
+    background:var(--panel-2); border:1px solid var(--line);
+    color:var(--text); padding:10px 18px; border-radius:20px;
+    font-size:13px; text-decoration:none; cursor:pointer;
+    transition:border-color .2s ease, transform .2s ease;
+  }
+  .share-btn:hover{ border-color:var(--emerald); transform:translateY(-2px); }
+
+  /* gallery */
+  .gallery-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:14px; }
+  .gallery-item{
+    position:relative; border-radius:8px; overflow:hidden;
+    border:1px solid var(--line); aspect-ratio:4/3;
+    background:var(--panel);
+  }
+  .gallery-item img, .gallery-item video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .gallery-item .cap{
+    position:absolute; bottom:0; inset-inline:0;
+    background:linear-gradient(transparent, rgba(6,9,7,0.9));
+    color:var(--text); font-size:12px; padding:20px 12px 10px;
+  }
+
+  footer{
+    text-align:center; padding:40px 20px 60px;
+    color:var(--muted); font-size:12px; letter-spacing:0.15em;
+    border-top:1px solid var(--line);
+  }
+
+  /* section divider glow */
+  section::before{
+    content:"";
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:1px; height:80px;
+    background:linear-gradient(var(--emerald), transparent);
+    opacity:0.4;
+  }
+
+  /* reveal-on-scroll */
+  .reveal{ opacity:0; transform:translateY(28px); transition:opacity .7s ease, transform .7s ease; }
+  .reveal.in{ opacity:1; transform:translateY(0); }
+
+  /* about */
+  .about-grid{ display:grid; grid-template-columns:1.1fr 0.9fr; gap:60px; align-items:start; }
+  .about-grid p{ color:var(--muted); font-size:1.05rem; line-height:1.9; margin-bottom:20px; }
+  .about-badge{
+    border:1px solid var(--line); border-radius:6px; padding:26px;
+    background:var(--panel);
+  }
+  .about-badge .k{ color:var(--mint); font-family:'Syne',sans-serif; font-weight:700; font-size:1.6rem; }
+  .about-badge .d{ color:var(--muted); font-size:13px; margin-top:6px; }
+  .about-badge + .about-badge{ margin-top:14px; }
+  @media (max-width:800px){ .about-grid{ grid-template-columns:1fr; } }
+
+  /* tiktok grid */
+  .tiktok-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(240px,1fr)); gap:16px; }
+  .tiktok-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:24px;
+    display:flex; align-items:center; gap:16px;
+    text-decoration:none;
+    color:var(--text);
+    transition:transform .25s ease, border-color .25s ease, background .25s ease;
+    position:relative;
+    overflow:hidden;
+  }
+  .tiktok-card:hover{ transform:translateY(-4px); border-color:var(--emerald); background:var(--panel-2); }
+  .tiktok-icon{
+    width:46px; height:46px; border-radius:50%;
+    background:linear-gradient(135deg, var(--emerald), var(--mint));
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .tiktok-icon svg{ width:22px; height:22px; fill:var(--void); }
+  .tiktok-card .tname{ font-family:'Syne',sans-serif; font-weight:600; font-size:1.05rem; }
+  .tiktok-card .thandle{ color:var(--muted); font-size:13px; margin-top:2px; }
+  .tiktok-card .tarrow{ margin-inline-start:auto; color:var(--emerald); font-size:18px; }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo mono" style="direction:ltr;"><img src="dvl-logo.png" alt="DVL" class="nav-logo-img">DV<span>L</span></div>
+  <button class="nav-toggle" id="nav-toggle" aria-label="القائمة">☰</button>
+  <ul class="mono" id="nav-links">
+    <li><a href="#about">من نحن</a></li>
+    <li><a href="#roster">الأعضاء</a></li>
+    <li><a href="#rules">القوانين</a></li>
+    <li><a href="#tiktok">تيك توك</a></li>
+    <li><a href="#gallery">المعرض</a></li>
+    <li><a href="#news">الأخبار</a></li>
+    <li><a href="#join">انضم</a></li>
+    <li><a href="admin.html" style="opacity:0.4; font-size:16px;" title="لوحة الإدارة">⚙</a></li>
+  </ul>
+</nav>
+
+<header>
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-content">
+    <div class="eyebrow-line mono">ONESTATE RP · LOS ANGELES</div>
+    <div class="hero-brand-row" style="direction:ltr;">
+      <img src="dvl-logo.png" alt="DVL" class="hero-logo-img">
+      <h1 class="brand">DVL</h1>
+    </div>
+    <p class="hero-sub">عصابة منظمة، نظام واضح، وتنفيذ بلا كلام زايد. DVL تتحرك بدقة داخل خريطة أونستيت.</p>
+  </div>
+  <div class="scroll-cue mono">▾ SCROLL</div>
+</header>
+
+<section id="stats">
+  <div class="stats">
+    <div class="stat"><div class="num" id="stat-members">24</div><div class="lbl mono">عضو نشط</div></div>
+    <div class="stat"><div class="num" id="stat-seasons">03</div><div class="lbl mono">مواسم</div></div>
+    <div class="stat"><div class="num" id="stat-achievements">12</div><div class="lbl mono">إنجاز موثّق</div></div>
+    <div class="stat"><div class="num" id="stat-ganghouses">01</div><div class="lbl mono">جانج هاوس</div></div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="eyebrow mono reveal">من نحن</div>
+  <h2 class="section-title reveal">هوية DVL</h2>
+  <div class="about-grid">
+    <div class="reveal">
+      <p id="about-p1">DVL مو مجرد اسم داخل أونستيت — هي منظومة كاملة: تسلسل قيادي واضح، اقتصاد داخلي، وحضور دائم على الخريطة. كل قرار يُتخذ بعد نقاش داخل القيادة، وكل عضو يعرف دوره بالضبط.</p>
+      <p id="about-p2">هدفنا الأساسي مو بس التوسّع، بل الاستمرارية — عصابة تقدر تدوم مواسم طويلة وتحافظ على مكانتها بين أقوى التشكيلات بالسيرفر.</p>
+    </div>
+    <div class="reveal">
+      <div class="about-badge">
+        <div class="k" id="about-founded">2024</div>
+        <div class="d">تأسست DVL</div>
+      </div>
+      <div class="about-badge">
+        <div class="k" id="about-region">لوس أنجلوس</div>
+        <div class="d">منطقة النفوذ الرئيسية</div>
+      </div>
+      <div class="about-badge">
+        <div class="k" id="about-joinsystem">دعوة فقط</div>
+        <div class="d">نظام الانضمام</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="roster">
+  <div class="eyebrow mono">الهيكل الداخلي</div>
+  <h2 class="section-title">ملف الأعضاء</h2>
+  <div class="leader-card" id="leader-card" style="display:none;">
+    <div class="lc-icon"><span>⭐</span></div>
+    <div class="lc-text">
+      <div class="lc-badge">القائد</div>
+      <div class="lc-name" id="lc-name"></div>
+      <div class="lc-sub">اضغط لو تجرؤ...</div>
+    </div>
+    <div class="lc-arrow">↗</div>
+  </div>
+  <div class="roster" id="roster-grid">
+    <div class="card" onclick='openMemberModal({name:"اسم اللاعب 1", role:"القائد", meta:"مؤسس DVL", gameName:"DVL_King", bio:"عضو مؤسس، مسؤول عن قرارات العصابة الكبرى وتنسيق العمليات.", photo:""})'>
+      <div class="role mono">القائد</div>
+      <div class="name">اسم اللاعب 1</div>
+      <div class="meta mono">مؤسس DVL</div>
+    </div>
+    <div class="card" onclick='openMemberModal({name:"اسم اللاعب 2", role:"النائب", meta:"مسؤول التجنيد", gameName:"DVL_Vice", bio:"مسؤول استقبال الأعضاء الجدد ومتابعة تدريبهم.", photo:""})'>
+      <div class="role mono">النائب</div>
+      <div class="name">اسم اللاعب 2</div>
+      <div class="meta mono">مسؤول التجنيد</div>
+    </div>
+    <div class="card" onclick='openMemberModal({name:"اسم اللاعب 3", role:"عضو موثوق", meta:"مسؤول العمليات", gameName:"DVL_Ops", bio:"يشرف على تنفيذ العمليات اليومية بالسوق السوداء.", photo:""})'>
+      <div class="role mono">عضو موثوق</div>
+      <div class="name">اسم اللاعب 3</div>
+      <div class="meta mono">مسؤول العمليات</div>
+    </div>
+    <div class="card" onclick='openMemberModal({name:"اسم اللاعب 4", role:"عضو", meta:"—", gameName:"DVL_M4", bio:"", photo:""})'>
+      <div class="role mono">عضو</div>
+      <div class="name">اسم اللاعب 4</div>
+      <div class="meta mono">—</div>
+    </div>
+    <div class="card" onclick='openMemberModal({name:"اسم اللاعب 5", role:"عضو", meta:"—", gameName:"DVL_M5", bio:"", photo:""})'>
+      <div class="role mono">عضو</div>
+      <div class="name">اسم اللاعب 5</div>
+      <div class="meta mono">—</div>
+    </div>
+    <div class="card" onclick='openMemberModal({name:"اسم اللاعب 6", role:"متدرب", meta:"فترة تجربة", gameName:"DVL_Trial", bio:"عضو جديد تحت التقييم.", photo:""})'>
+      <div class="role mono">متدرب</div>
+      <div class="name">اسم اللاعب 6</div>
+      <div class="meta mono">فترة تجربة</div>
+    </div>
+  </div>
+</section>
+
+<section id="rules">
+  <div class="eyebrow mono">النظام الداخلي</div>
+  <h2 class="section-title">شروط الانتماء</h2>
+  <div class="rules">
+    <div class="rule">
+      <div class="code mono">01</div>
+      <div class="txt"><b>الولاء أولاً.</b> ما تشتغل مع عصابة ثانية بنفس الوقت، وما تسرّب معلومات الجانج هاوس.</div>
+    </div>
+    <div class="rule">
+      <div class="code mono">02</div>
+      <div class="txt"><b>الحضور.</b> الأحداث الأسبوعية إلزامية، وأي غياب يبلّغ عنه مسبقاً.</div>
+    </div>
+    <div class="rule">
+      <div class="code mono">03</div>
+      <div class="txt"><b>التمثيل.</b> اسم DVL أمانة — احترام الأدمن وقوانين اللعبة داخل وخارج الشات.</div>
+    </div>
+    <div class="rule">
+      <div class="code mono">04</div>
+      <div class="txt"><b>المساهمة.</b> كل عضو يساهم بحصة من الدخل لصندوق العصابة.</div>
+    </div>
+  </div>
+</section>
+
+<section id="tiktok">
+  <div class="eyebrow mono">حساباتنا</div>
+  <h2 class="section-title">تيك توك الأعضاء</h2>
+  <div class="tiktok-grid" id="tiktok-grid">
+    <a href="#" class="tiktok-card" target="_blank" rel="noopener">
+      <div class="tiktok-icon"><svg viewBox="0 0 24 24"><path d="M16.5 3c.3 1.9 1.6 3.4 3.5 3.7v2.6c-1.3 0-2.5-.4-3.5-1.1v6.6c0 3.1-2.5 5.2-5.3 5.2S5.9 17.9 5.9 14.8s2.5-5.2 5.3-5.2c.4 0 .8 0 1.2.1v2.7c-.4-.1-.8-.2-1.2-.2-1.5 0-2.7 1.2-2.7 2.7s1.2 2.7 2.7 2.7 2.8-1.1 2.8-2.7V3h2.5z"/></svg></div>
+      <div>
+        <div class="tname">اسم اللاعب 1</div>
+        <div class="thandle mono">tiktok.com/@player1</div>
+      </div>
+      <div class="tarrow">↗</div>
+    </a>
+    <a href="#" class="tiktok-card" target="_blank" rel="noopener">
+      <div class="tiktok-icon"><svg viewBox="0 0 24 24"><path d="M16.5 3c.3 1.9 1.6 3.4 3.5 3.7v2.6c-1.3 0-2.5-.4-3.5-1.1v6.6c0 3.1-2.5 5.2-5.3 5.2S5.9 17.9 5.9 14.8s2.5-5.2 5.3-5.2c.4 0 .8 0 1.2.1v2.7c-.4-.1-.8-.2-1.2-.2-1.5 0-2.7 1.2-2.7 2.7s1.2 2.7 2.7 2.7 2.8-1.1 2.8-2.7V3h2.5z"/></svg></div>
+      <div>
+        <div class="tname">اسم اللاعب 2</div>
+        <div class="thandle mono">tiktok.com/@player2</div>
+      </div>
+      <div class="tarrow">↗</div>
+    </a>
+    <a href="#" class="tiktok-card" target="_blank" rel="noopener">
+      <div class="tiktok-icon"><svg viewBox="0 0 24 24"><path d="M16.5 3c.3 1.9 1.6 3.4 3.5 3.7v2.6c-1.3 0-2.5-.4-3.5-1.1v6.6c0 3.1-2.5 5.2-5.3 5.2S5.9 17.9 5.9 14.8s2.5-5.2 5.3-5.2c.4 0 .8 0 1.2.1v2.7c-.4-.1-.8-.2-1.2-.2-1.5 0-2.7 1.2-2.7 2.7s1.2 2.7 2.7 2.7 2.8-1.1 2.8-2.7V3h2.5z"/></svg></div>
+      <div>
+        <div class="tname">اسم اللاعب 3</div>
+        <div class="thandle mono">tiktok.com/@player3</div>
+      </div>
+      <div class="tarrow">↗</div>
+    </a>
+  </div>
+</section>
+
+<section id="gallery">
+  <div class="eyebrow mono">لحظات مميزة</div>
+  <h2 class="section-title">المعرض</h2>
+  <div class="gallery-grid" id="gallery-grid">
+    <p class="meta mono" style="grid-column:1/-1; color:var(--muted);">قريباً — صور وفيديوهات من العصابة.</p>
+  </div>
+</section>
+
+<section id="news">
+  <div class="eyebrow mono">السجل</div>
+  <h2 class="section-title">آخر التحركات</h2>
+  <div class="feed" id="news-feed">
+    <div class="feed-item">
+      <div class="date mono">هذا الأسبوع</div>
+      <div>
+        <span class="tag">إنجاز</span>
+        <h3>سيطرة كاملة على السوق السوداء بالحي الجنوبي</h3>
+        <p>وسّعنا نفوذنا بعد سلسلة اتفاقيات ونجحنا بالسيطرة على أهم نقاط الإنتاج.</p>
+      </div>
+    </div>
+    <div class="feed-item">
+      <div class="date mono">الأسبوع اللي فات</div>
+      <div>
+        <span class="tag">حدث</span>
+        <h3>حدث Dos Caminos — تحالف مؤقت</h3>
+        <p>تعاون ناجح انتهى بمكافآت مجزية لكل الأعضاء المشاركين.</p>
+      </div>
+    </div>
+    <div class="feed-item">
+      <div class="date mono">قبل شهر</div>
+      <div>
+        <span class="tag">إنجاز</span>
+        <h3>ترقية الجانج هاوس للمستوى الثالث</h3>
+        <p>بفضل مساهمات الأعضاء، رفعنا مستوى المقر وفتحنا مختبرات إنتاج إضافية.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="join">
+  <div class="join">
+    <h2>تبي تنضم لـ DVL؟</h2>
+    <p>لو عندك خبرة باللعبة وتقدر تلتزم بالنظام الداخلي، عبّي الفورم وننتظر ردك.</p>
+    <form id="join-form" style="display:flex; flex-direction:column; gap:14px; max-width:380px; margin:0 auto;">
+      <input name="name" required placeholder="اسمك باللعبة" class="mono" style="background:var(--panel); border:1px solid var(--line); color:var(--text); padding:14px 16px; border-radius:4px; font-size:14px;">
+      <input name="tiktok" placeholder="حساب التيك توك (اختياري)" class="mono" style="background:var(--panel); border:1px solid var(--line); color:var(--text); padding:14px 16px; border-radius:4px; font-size:14px;">
+      <textarea name="message" placeholder="ليش تبي تنضم؟" rows="3" class="mono" style="background:var(--panel); border:1px solid var(--line); color:var(--text); padding:14px 16px; border-radius:4px; font-size:14px; resize:vertical;"></textarea>
+      <button type="submit" class="btn mono" style="border:none; cursor:pointer;">إرسال الطلب</button>
+      <div id="join-status" class="mono" style="font-size:13px; min-height:18px;"></div>
+    </form>
+    <div class="share-row mono">
+      <a href="#" class="share-btn" id="share-tiktok" target="_blank">تيك توك ↗</a>
+      <a href="#" class="share-btn" id="share-discord" target="_blank">ديسكورد ↗</a>
+      <button class="share-btn" id="share-copy">نسخ الرابط</button>
+    </div>
+  </div>
+</section>
+
+<div class="cinematic-overlay" id="cinematic-overlay">
+  <div class="cinematic-text" id="cinematic-text"></div>
+</div>
+
+<div class="special-overlay" id="special-overlay">
+  <div class="special-close" onclick="closeSpecialProfile()">✕</div>
+  <div class="special-content">
+    <div class="special-photo-ring">
+      <div class="special-photo" id="special-photo">لا توجد صورة</div>
+    </div>
+    <div class="special-badge" id="special-role">القائد</div>
+    <div class="special-name" id="special-name"></div>
+    <div class="special-gamename" id="special-gamename"></div>
+    <div class="special-bio" id="special-bio"></div>
+    <div class="special-info" id="special-info"></div>
+  </div>
+  <audio id="special-audio" loop preload="auto" playsinline></audio>
+</div>
+
+<div class="modal-overlay" id="member-modal">
+  <div class="modal-box">
+    <div class="modal-close" onclick="closeMemberModal()">✕</div>
+    <div class="modal-photo" id="modal-photo">لا توجد صورة</div>
+    <div class="modal-body">
+      <div class="m-role" id="modal-role"></div>
+      <div class="m-name" id="modal-name"></div>
+      <div class="m-gamename mono" id="modal-gamename"></div>
+      <div class="m-bio" id="modal-bio"></div>
+    </div>
+  </div>
+</div>
+
+<footer class="mono">DVL — ONESTATE RP · LOS ANGELES</footer>
+
+<script>
+  // 3D hero: rotating wireframe icosahedron with gradient green glow
+  const canvas = document.getElementById('hero-canvas');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+  camera.position.z = 7;
+
+  const group = new THREE.Group();
+  scene.add(group);
+
+  // core wireframe icosahedron
+  const geo = new THREE.IcosahedronGeometry(2.6, 1);
+  const mat = new THREE.MeshBasicMaterial({ color:0x12b76a, wireframe:true, transparent:true, opacity:0.55 });
+  const mesh = new THREE.Mesh(geo, mat);
+  group.add(mesh);
+
+  // inner glow shape
+  const innerGeo = new THREE.IcosahedronGeometry(1.9, 1);
+  const innerMat = new THREE.MeshBasicMaterial({ color:0x7cf7c4, wireframe:true, transparent:true, opacity:0.3 });
+  const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+  group.add(innerMesh);
+
+  // particle field
+  const particleCount = 220;
+  const particleGeo = new THREE.BufferGeometry();
+  const positions = new Float32Array(particleCount*3);
+  for(let i=0;i<particleCount;i++){
+    positions[i*3] = (Math.random()-0.5)*14;
+    positions[i*3+1] = (Math.random()-0.5)*14;
+    positions[i*3+2] = (Math.random()-0.5)*14;
+  }
+  particleGeo.setAttribute('position', new THREE.BufferAttribute(positions,3));
+  const particleMat = new THREE.PointsMaterial({ color:0x12b76a, size:0.03, transparent:true, opacity:0.5 });
+  const particles = new THREE.Points(particleGeo, particleMat);
+  scene.add(particles);
+
+  let mouseX = 0, mouseY = 0;
+  window.addEventListener('mousemove', (e)=>{
+    mouseX = (e.clientX / window.innerWidth - 0.5);
+    mouseY = (e.clientY / window.innerHeight - 0.5);
+  });
+
+  function animate(){
+    requestAnimationFrame(animate);
+    mesh.rotation.y += 0.0022;
+    mesh.rotation.x += 0.0009;
+    innerMesh.rotation.y -= 0.0016;
+    innerMesh.rotation.x -= 0.0007;
+    particles.rotation.y += 0.0004;
+
+    group.rotation.y += (mouseX*0.6 - group.rotation.y)*0.02;
+    group.rotation.x += (mouseY*0.4 - group.rotation.x)*0.02;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // scroll reveal
+  document.querySelectorAll('.section-title, .eyebrow, .roster, .rules, .tiktok-grid, .gallery-grid, .feed, .join, .stats').forEach(el=>el.classList.add('reveal'));
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+      if(entry.isIntersecting){ entry.target.classList.add('in'); io.unobserve(entry.target); }
+    });
+  }, { threshold:0.15 });
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+
+<script>
+  // member profile modal (global scope so inline onclick works)
+  window.openMemberModal = function(m){
+    document.getElementById('modal-role').textContent = m.role || '';
+    document.getElementById('modal-name').textContent = m.name || '';
+    document.getElementById('modal-gamename').textContent = m.gameName ? ('@'+m.gameName) : '';
+    document.getElementById('modal-bio').textContent = m.bio || 'لا يوجد وصف بعد.';
+    const photoEl = document.getElementById('modal-photo');
+    if(m.photo){
+      photoEl.style.backgroundImage = `url('${m.photo}')`;
+      photoEl.textContent = '';
+    }else{
+      photoEl.style.backgroundImage = '';
+      photoEl.textContent = 'لا توجد صورة';
+    }
+    document.getElementById('member-modal').classList.add('open');
+  }
+  window.closeMemberModal = function(){
+    document.getElementById('member-modal').classList.remove('open');
+  }
+  document.getElementById('member-modal').addEventListener('click', (e)=>{
+    if(e.target.id === 'member-modal') closeMemberModal();
+  });
+
+  // --- calm typewriter intro, then reveal the full-screen special profile ---
+  function typewrite(el, text, speed){
+    return new Promise(resolve=>{
+      el.innerHTML = '<span class="cursor"></span>';
+      let i = 0;
+      const cursor = el.querySelector('.cursor');
+      const timer = setInterval(()=>{
+        if(i < text.length){
+          cursor.insertAdjacentText('beforebegin', text[i]);
+          i++;
+        }else{
+          clearInterval(timer);
+          resolve();
+        }
+      }, speed || 55);
+    });
+  }
+
+  window.triggerLeaderIntro = async function(specialData){
+    const overlay = document.getElementById('cinematic-overlay');
+    const textEl = document.getElementById('cinematic-text');
+    overlay.classList.remove('fade-out');
+    overlay.classList.add('show');
+    await typewrite(textEl, specialData.quote || 'Are you looking for trouble?');
+    await new Promise(r=>setTimeout(r, 900));
+    overlay.classList.add('fade-out');
+    setTimeout(()=>{
+      overlay.classList.remove('show','fade-out');
+      openSpecialProfile(specialData);
+    }, 600);
+  }
+
+  window.openSpecialProfile = function(data){
+    document.getElementById('special-role').textContent = data.role || 'القائد';
+    document.getElementById('special-name').textContent = data.name || '';
+    document.getElementById('special-gamename').textContent = data.gameName ? ('@'+data.gameName) : '';
+    document.getElementById('special-bio').textContent = data.bio || '';
+    document.getElementById('special-info').textContent = data.info || '';
+    const photoEl = document.getElementById('special-photo');
+    if(data.photo){
+      photoEl.style.backgroundImage = `url('${data.photo}')`;
+      photoEl.textContent = '';
+    }else{
+      photoEl.style.backgroundImage = '';
+      photoEl.textContent = 'لا توجد صورة';
+    }
+    const audio = document.getElementById('special-audio');
+    if(data.audioUrl){
+      if(audio.paused){
+        audio.src = data.audioUrl;
+        audio.volume = 0.5;
+        audio.play().catch(()=>{});
+      }
+    }else{
+      audio.removeAttribute('src');
+    }
+    document.getElementById('special-overlay').dataset.farewell = data.farewell || "Don't you dare come close!";
+    document.getElementById('special-overlay').classList.add('open');
+  }
+
+  window.closeSpecialProfile = function(){
+    const overlay = document.getElementById('special-overlay');
+    const audio = document.getElementById('special-audio');
+    const farewell = overlay.dataset.farewell || "Don't you dare come close!";
+    overlay.classList.remove('open');
+    audio.pause();
+
+    const cinematic = document.getElementById('cinematic-overlay');
+    const textEl = document.getElementById('cinematic-text');
+    textEl.innerHTML = `<span style="opacity:0.9;">${farewell}</span>`;
+    cinematic.classList.remove('fade-out');
+    cinematic.classList.add('show');
+    setTimeout(()=>{
+      cinematic.classList.add('fade-out');
+      setTimeout(()=> cinematic.classList.remove('show','fade-out'), 600);
+    }, 1100);
+  }
+
+  document.getElementById('special-overlay').addEventListener('click', (e)=>{
+    if(e.target.id === 'special-overlay') closeSpecialProfile();
+  });
+
+  // mobile nav toggle
+  const navToggle = document.getElementById('nav-toggle');
+  const navLinks = document.getElementById('nav-links');
+  if(navToggle){
+    function setNavOpen(isOpen){
+      navLinks.classList.toggle('open', isOpen);
+      navToggle.textContent = isOpen ? '✕' : '☰';
+    }
+    navToggle.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      setNavOpen(!navLinks.classList.contains('open'));
+    });
+    navLinks.querySelectorAll('a').forEach(a=>{
+      a.addEventListener('click', ()=> setNavOpen(false));
+    });
+    document.addEventListener('click', (e)=>{
+      if(navLinks.classList.contains('open') && !navLinks.contains(e.target) && e.target !== navToggle){
+        setNavOpen(false);
+      }
+    });
+    document.addEventListener('keydown', (e)=>{
+      if(e.key === 'Escape') setNavOpen(false);
+    });
+  }
+</script>
+
+</body>
+</html>
