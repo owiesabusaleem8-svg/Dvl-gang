@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DVL — لوحة الإدارة</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500&family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#060907; --panel:#0c1310; --panel-2:#111c17;
+    --emerald:#12b76a; --mint:#7cf7c4; --text:#dfe8e3; --muted:#7c8c84;
+    --line: rgba(223,232,227,0.1);
+  }
+  *{box-sizing:border-box;}
+  body{ background:var(--void); color:var(--text); font-family:'Tajawal',sans-serif; margin:0; padding:40px 20px; }
+  .mono{ font-family:'IBM Plex Mono',monospace; }
+  h1{ font-family:'Syne',sans-serif; font-weight:800; margin-bottom:6px; }
+  h1 span{ color:var(--emerald); }
+  .sub{ color:var(--muted); margin-bottom:36px; font-size:14px; }
+  .wrap{ max-width:900px; margin:0 auto; }
+  .panel{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:26px; margin-bottom:24px; }
+  .panel h2{ font-family:'Syne',sans-serif; font-size:1.2rem; margin-bottom:18px; color:var(--mint); }
+  input, textarea{ width:100%; background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:11px 14px; border-radius:4px; font-size:14px; margin-bottom:10px; font-family:'Tajawal',sans-serif; }
+  form{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  form textarea, form .full{ grid-column:1/-1; }
+  button{ background:linear-gradient(90deg,var(--emerald),var(--mint)); color:var(--void); border:none; padding:11px 22px; border-radius:4px; font-weight:700; cursor:pointer; font-size:13px; }
+  .list-item{ display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line); font-size:14px; gap:12px; }
+  .list-item .meta{ color:var(--muted); font-size:12px; }
+  .del{ background:none; border:1px solid #a4293c; color:#e08a8a; padding:6px 14px; border-radius:4px; font-size:12px; }
+  .approve{ background:linear-gradient(90deg,var(--emerald),var(--mint)); color:var(--void); border:none; padding:6px 14px; border-radius:4px; font-size:12px; margin-inline-end:6px; }
+  #login-box{ max-width:340px; margin:80px auto; text-align:center; }
+  #login-box input{ margin-bottom:12px; }
+  #app{ display:none; }
+</style>
+</head>
+<body>
+
+<div id="login-box">
+  <h1>DVL <span>ADMIN</span></h1>
+  <p class="sub mono">سجل دخول للمتابعة</p>
+  <input id="login-username" type="text" placeholder="اسم المستخدم">
+  <input id="login-pass" type="password" placeholder="كلمة المرور">
+  <button onclick="doLogin()" style="width:100%;">دخول</button>
+  <div id="login-error" style="color:#e08a8a; margin-top:10px; font-size:13px;"></div>
+</div>
+
+<div id="app">
+<div class="wrap">
+  <h1>DVL <span>ADMIN</span></h1>
+  <p class="sub mono">لوحة إدارة المحتوى — يتحدث الموقع فوراً</p>
+  <button id="logout-btn" style="background:none; border:1px solid var(--line); color:var(--muted); padding:8px 18px; border-radius:4px; font-size:12px; margin-bottom:20px; cursor:pointer;">تسجيل خروج</button>
+
+  <div class="panel" id="special-panel" style="display:none; border-color:#f0a73a;">
+    <h2 style="color:#f0a73a;">⭐ بروفايل خالد المميز (خاص — بس انتوا الاثنين)</h2>
+    <form id="special-form">
+      <input name="name" placeholder="الاسم" value="خالد">
+      <input name="gameName" placeholder="الاسم باللعبة">
+      <input name="role" placeholder="اللقب" value="القائد">
+      <input name="photo" placeholder="رابط الصورة (URL)">
+      <textarea name="bio" placeholder="شرح عنه" class="full"></textarea>
+      <input name="quote" placeholder="نص الشاشة السودا" value="Are you looking for trouble?" class="full">
+      <button type="submit" class="full">حفظ بروفايل خالد</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>طلبات الانضمام</h2>
+    <div id="applications-list"></div>
+  </div>
+
+  <div class="panel">
+    <h2>روابط المشاركة (تيك توك وديسكورد)</h2>
+    <form id="social-form">
+      <input name="tiktok" placeholder="رابط تيك توك العصابة" class="full">
+      <input name="discord" placeholder="رابط دعوة ديسكورد" class="full">
+      <button type="submit" class="full">حفظ الروابط</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>قسم "من نحن"</h2>
+    <form id="about-form">
+      <textarea name="p1" placeholder="الفقرة الأولى" class="full"></textarea>
+      <textarea name="p2" placeholder="الفقرة الثانية" class="full"></textarea>
+      <input name="founded" placeholder="سنة التأسيس (مثال: 2024)">
+      <input name="region" placeholder="منطقة النفوذ (مثال: لوس أنجلوس)">
+      <input name="joinSystem" placeholder="نظام الانضمام (مثال: دعوة فقط)" class="full">
+      <button type="submit" class="full">حفظ</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>الإحصائيات الثابتة</h2>
+    <form id="stats-form">
+      <input name="members" type="number" placeholder="عدد الأعضاء (اتركه فاضي للحساب التلقائي)">
+      <input name="achievements" type="number" placeholder="عدد الإنجازات (اتركه فاضي للحساب التلقائي)">
+      <input name="seasons" type="number" placeholder="عدد المواسم">
+      <input name="ganghouses" type="number" placeholder="عدد الجانج هاوسات">
+      <button type="submit" class="full">حفظ الإحصائيات</button>
+    </form>
+    <p class="meta mono" style="margin-top:10px;">اتركهم فاضيين لو تبي عدد الأعضاء/الإنجازات يتحسبون تلقائي.</p>
+  </div>
+
+  <div class="panel">
+    <h2>المعرض (صور وفيديوهات مميزة)</h2>
+    <form id="gallery-form">
+      <select name="type" style="grid-column:1/-1; background:var(--panel-2); border:1px solid var(--line); color:var(--text); padding:11px 14px; border-radius:4px; margin-bottom:10px;">
+        <option value="image">صورة</option>
+        <option value="video">فيديو (رابط يوتيوب/تيك توك مباشر أو mp4)</option>
+      </select>
+      <input name="url" placeholder="رابط الصورة/الفيديو" required class="full">
+      <input name="caption" placeholder="وصف قصير (اختياري)" class="full">
+      <button type="submit" class="full">إضافة للمعرض</button>
+      <a href="#" id="cancel-edit-gallery" class="full mono" style="display:none; text-align:center; color:var(--muted); font-size:12px; margin-top:8px;">إلغاء التعديل</a>
+    </form>
+    <div id="gallery-list" style="margin-top:16px;"></div>
+  </div>
+
+  <div class="panel">
+    <h2>الأعضاء</h2>
+    <form id="member-form">
+      <input name="name" placeholder="الاسم" required>
+      <input name="role" placeholder="الرتبة (مثال: القائد)">
+      <input name="gameName" placeholder="الاسم باللعبة">
+      <input name="order" type="number" placeholder="ترتيب العرض" value="0">
+      <input name="meta" placeholder="ملاحظة قصيرة" class="full">
+      <input name="photo" placeholder="رابط الصورة (URL)" class="full">
+      <textarea name="bio" placeholder="شرح عن العضو" class="full"></textarea>
+      <button type="submit" class="full">إضافة عضو</button>
+      <a href="#" id="cancel-edit-member" class="full mono" style="display:none; text-align:center; color:var(--muted); font-size:12px; margin-top:8px;">إلغاء التعديل</a>
+    </form>
+    <div id="members-list" style="margin-top:16px;"></div>
+  </div>
+
+  <div class="panel">
+    <h2>تيك توك</h2>
+    <form id="tiktok-form">
+      <input name="name" placeholder="الاسم" required>
+      <input name="handle" placeholder="@username">
+      <input name="url" placeholder="رابط الحساب" class="full">
+      <button type="submit" class="full">إضافة حساب</button>
+      <a href="#" id="cancel-edit-tiktok" class="full mono" style="display:none; text-align:center; color:var(--muted); font-size:12px; margin-top:8px;">إلغاء التعديل</a>
+    </form>
+    <div id="tiktok-list" style="margin-top:16px;"></div>
+  </div>
+
+  <div class="panel">
+    <h2>الأخبار والإنجازات</h2>
+    <form id="news-form">
+      <input name="title" placeholder="العنوان" required class="full">
+      <input name="tag" placeholder="التصنيف (إنجاز / حدث)">
+      <input name="date" placeholder="التاريخ (مثال: هذا الأسبوع)">
+      <textarea name="body" placeholder="التفاصيل" class="full"></textarea>
+      <button type="submit" class="full">نشر</button>
+      <a href="#" id="cancel-edit-news" class="full mono" style="display:none; text-align:center; color:var(--muted); font-size:12px; margin-top:8px;">إلغاء التعديل</a>
+    </form>
+    <div id="news-list" style="margin-top:16px;"></div>
+  </div>
+</div>
+</div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, browserSessionPersistence, setPersistence, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+  import { getFirestore, collection, getDocs, addDoc, deleteDoc, doc, getDoc, setDoc, updateDoc, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // 🔧 نفس بيانات المشروع اللي حطيتها بالموقع الرئيسي
+  const firebaseConfig = {
+    apiKey: "AIzaSyA_ozr_jD9ePe2E0mZVYhtHZ8RjvQ-KcUw",
+    authDomain: "dvl-gang.firebaseapp.com",
+    projectId: "dvl-gang",
+    storageBucket: "dvl-gang.firebasestorage.app",
+    messagingSenderId: "924186560493",
+    appId: "1:924186560493:web:618de8a145cf27c1a509e4"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  window.doLogin = async function(){
+    const username = document.getElementById('login-username').value.trim().toLowerCase();
+    const pass = document.getElementById('login-pass').value;
+    const errEl = document.getElementById('login-error');
+    errEl.textContent = '';
+    if(!username || !pass){ errEl.textContent = 'عبّي اسم المستخدم وكلمة المرور.'; return; }
+    try{
+      await setPersistence(auth, browserSessionPersistence);
+      const snap = await getDoc(doc(db, 'admin_usernames', username));
+      if(!snap.exists()){ errEl.textContent = 'اسم المستخدم غير موجود.'; return; }
+      const email = snap.data().email;
+      await signInWithEmailAndPassword(auth, email, pass);
+    }catch(e){
+      errEl.textContent = 'بيانات الدخول غير صحيحة أو Firebase مو معبّى بعد.';
+    }
+  }
+
+  const logoutBtn = document.getElementById('logout-btn');
+  if(logoutBtn) logoutBtn.addEventListener('click', ()=> signOut(auth));
+
+  // sign out automatically when leaving the admin page
+  window.addEventListener('pagehide', ()=> signOut(auth));
+
+  const SPECIAL_ALLOWED_UIDS = ['GcGdAitmi0SlgtU0HjU1MFtCR083', 'dcyCKU3YQ1YbYf29EtJfUh1RqIy2'];
+
+  onAuthStateChanged(auth, (user)=>{
+    if(user){
+      document.getElementById('login-box').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      const specialPanel = document.getElementById('special-panel');
+      if(specialPanel){
+        specialPanel.style.display = SPECIAL_ALLOWED_UIDS.includes(user.uid) ? 'block' : 'none';
+      }
+      loadAll();
+    }else{
+      document.getElementById('login-box').style.display = 'block';
+      document.getElementById('app').style.display = 'none';
+    }
+  });
+
+  async function loadAll(){
+    renderMembersList();
+    renderEditableList('tiktok', ['name','handle'], null, tiktokFieldMap);
+    renderEditableList('news', ['title','tag','date'], 'createdAt', newsFieldMap, true);
+    renderApplications();
+    renderEditableList('gallery', null, null, galleryFieldMap, false, true);
+    loadStatsSettings();
+    loadAboutSettings();
+    loadSocialSettings();
+    loadSpecialProfile();
+  }
+
+  // generic editable-list state and helpers
+  const editingIds = { tiktok:null, news:null, gallery:null };
+
+  function tiktokFieldMap(f, m){
+    f.name.value = m.name || ''; f.handle.value = m.handle || ''; f.url.value = m.url || '';
+  }
+  function newsFieldMap(f, m){
+    f.title.value = m.title || ''; f.tag.value = m.tag || ''; f.date.value = m.date || ''; f.body.value = m.body || '';
+  }
+  function galleryFieldMap(f, m){
+    f.type.value = m.type || 'image'; f.url.value = m.url || ''; f.caption.value = m.caption || '';
+  }
+
+  function startEdit(colName, id, data, fieldMap){
+    editingIds[colName] = id;
+    const f = document.getElementById(colName+'-form');
+    fieldMap(f, data);
+    f.querySelector('button[type="submit"]').textContent = 'حفظ التعديل';
+    const cancelLink = document.getElementById('cancel-edit-'+colName);
+    if(cancelLink) cancelLink.style.display = 'block';
+    f.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
+  function wireCancelEdit(colName, addLabel){
+    const link = document.getElementById('cancel-edit-'+colName);
+    if(!link) return;
+    link.addEventListener('click', (e)=>{
+      e.preventDefault();
+      editingIds[colName] = null;
+      const f = document.getElementById(colName+'-form');
+      f.reset();
+      f.querySelector('button[type="submit"]').textContent = addLabel;
+      link.style.display = 'none';
+    });
+  }
+  wireCancelEdit('tiktok', 'إضافة حساب');
+  wireCancelEdit('news', 'نشر');
+  wireCancelEdit('gallery', 'إضافة للمعرض');
+
+  async function renderEditableList(colName, fields, orderField, fieldMap, desc, isGallery){
+    const el = document.getElementById(colName+'-list');
+    const snap = orderField
+      ? await getDocs(query(collection(db,colName), orderBy(orderField, desc ? 'desc':'asc')))
+      : await getDocs(collection(db,colName));
+    el.innerHTML = '';
+    if(snap.empty){ el.innerHTML = '<p class="meta mono">لا يوجد عناصر بعد</p>'; return; }
+    snap.forEach(d=>{
+      const data = d.data();
+      const label = isGallery
+        ? `${data.type === 'video' ? '🎬' : '🖼️'} ${data.caption || data.url}`
+        : fields.map(f=>data[f]).filter(Boolean).join(' — ');
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `
+        <span>${label}</span>
+        <span>
+          <button class="approve edit-item">تعديل</button>
+          <button class="del" data-col="${colName}" data-id="${d.id}">حذف</button>
+        </span>`;
+      item.querySelector('.edit-item').addEventListener('click', ()=> startEdit(colName, d.id, data, fieldMap));
+      el.appendChild(item);
+    });
+  }
+
+  async function loadSocialSettings(){
+    const snap = await getDoc(doc(db,'settings','social'));
+    if(snap.exists()){
+      const s = snap.data();
+      const f = document.getElementById('social-form');
+      f.tiktok.value = s.tiktok || '';
+      f.discord.value = s.discord || '';
+    }
+  }
+
+  document.getElementById('social-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    await setDoc(doc(db,'settings','social'), { tiktok:f.tiktok.value, discord:f.discord.value });
+    const btn = f.querySelector('button');
+    const original = btn.textContent;
+    btn.textContent = 'تم الحفظ ✓';
+    setTimeout(()=> btn.textContent = original, 1600);
+  });
+
+  async function loadAboutSettings(){
+    const snap = await getDoc(doc(db,'settings','about'));
+    if(snap.exists()){
+      const a = snap.data();
+      const f = document.getElementById('about-form');
+      f.p1.value = a.p1 || '';
+      f.p2.value = a.p2 || '';
+      f.founded.value = a.founded || '';
+      f.region.value = a.region || '';
+      f.joinSystem.value = a.joinSystem || '';
+    }
+  }
+
+  document.getElementById('about-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    await setDoc(doc(db,'settings','about'), {
+      p1:f.p1.value, p2:f.p2.value, founded:f.founded.value, region:f.region.value, joinSystem:f.joinSystem.value
+    });
+    const btn = f.querySelector('button');
+    const original = btn.textContent;
+    btn.textContent = 'تم الحفظ ✓';
+    setTimeout(()=> btn.textContent = original, 1600);
+  });
+
+  async function loadStatsSettings(){
+    const snap = await getDoc(doc(db,'settings','stats'));
+    if(snap.exists()){
+      const s = snap.data();
+      const f = document.getElementById('stats-form');
+      if(s.members != null) f.members.value = s.members;
+      if(s.achievements != null) f.achievements.value = s.achievements;
+      if(s.seasons != null) f.seasons.value = s.seasons;
+      if(s.ganghouses != null) f.ganghouses.value = s.ganghouses;
+    }
+  }
+
+  document.getElementById('gallery-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    const data = { type:f.type.value, url:f.url.value, caption:f.caption.value };
+    if(editingIds.gallery){
+      await updateDoc(doc(db,'gallery',editingIds.gallery), data);
+      editingIds.gallery = null;
+      f.querySelector('button[type="submit"]').textContent = 'إضافة للمعرض';
+      document.getElementById('cancel-edit-gallery').style.display = 'none';
+    }else{
+      await addDoc(collection(db,'gallery'), {...data, createdAt: serverTimestamp()});
+    }
+    f.reset(); loadAll();
+  });
+
+  document.getElementById('stats-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    await setDoc(doc(db,'settings','stats'), {
+      members: f.members.value === '' ? null : Number(f.members.value),
+      achievements: f.achievements.value === '' ? null : Number(f.achievements.value),
+      seasons: Number(f.seasons.value)||0,
+      ganghouses: Number(f.ganghouses.value)||0
+    });
+    const btn = f.querySelector('button');
+    const original = btn.textContent;
+    btn.textContent = 'تم الحفظ ✓';
+    setTimeout(()=> btn.textContent = original, 1600);
+  });
+
+  let editingMemberId = null;
+
+  async function renderMembersList(){
+    const el = document.getElementById('members-list');
+    const snap = await getDocs(query(collection(db,'members'), orderBy('order','asc')));
+    el.innerHTML = '';
+    snap.forEach(d=>{
+      const m = d.data();
+      const label = [m.name, m.role, m.meta].filter(Boolean).join(' — ');
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `
+        <span>${label}</span>
+        <span>
+          <button class="approve edit-member" data-id="${d.id}">تعديل</button>
+          <button class="del" data-col="members" data-id="${d.id}">حذف</button>
+        </span>`;
+      item.querySelector('.edit-member').addEventListener('click', ()=> startEditMember(d.id, m));
+      el.appendChild(item);
+    });
+  }
+
+  function startEditMember(id, m){
+    editingMemberId = id;
+    const f = document.getElementById('member-form');
+    f.name.value = m.name || '';
+    f.role.value = m.role || '';
+    f.gameName.value = m.gameName || '';
+    f.order.value = m.order || 0;
+    f.meta.value = m.meta || '';
+    f.photo.value = m.photo || '';
+    f.bio.value = m.bio || '';
+    f.querySelector('button[type="submit"]').textContent = 'حفظ التعديل';
+    document.getElementById('cancel-edit-member').style.display = 'block';
+    f.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
+  async function loadSpecialProfile(){
+    const f = document.getElementById('special-form');
+    if(!f) return;
+    try{
+      const snap = await getDoc(doc(db,'special','khalid'));
+      if(snap.exists()){
+        const s = snap.data();
+        if(s.name) f.name.value = s.name;
+        if(s.gameName) f.gameName.value = s.gameName;
+        if(s.role) f.role.value = s.role;
+        if(s.photo) f.photo.value = s.photo;
+        if(s.bio) f.bio.value = s.bio;
+        if(s.quote) f.quote.value = s.quote;
+      }
+    }catch(e){ console.warn('special profile load failed', e); }
+  }
+
+  const specialForm = document.getElementById('special-form');
+  if(specialForm){
+    specialForm.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      const f = e.target;
+      try{
+        await setDoc(doc(db,'special','khalid'), {
+          name:f.name.value, gameName:f.gameName.value, role:f.role.value,
+          photo:f.photo.value, bio:f.bio.value, quote:f.quote.value
+        });
+        const btn = f.querySelector('button');
+        const original = btn.textContent;
+        btn.textContent = 'تم الحفظ ✓';
+        setTimeout(()=> btn.textContent = original, 1600);
+      }catch(e){
+        alert('ما قدرت أحفظ — تأكد إن حسابك من ضمن المخوّلين بقواعد Firestore');
+      }
+    });
+  }
+
+  document.getElementById('cancel-edit-member').addEventListener('click', (e)=>{
+    e.preventDefault();
+    editingMemberId = null;
+    const f = document.getElementById('member-form');
+    f.reset();
+    f.querySelector('button[type="submit"]').textContent = 'إضافة عضو';
+    e.target.style.display = 'none';
+  });
+
+  
+
+  async function renderApplications(){
+    const el = document.getElementById('applications-list');
+    const snap = await getDocs(query(collection(db,'applications'), orderBy('createdAt','desc')));
+    el.innerHTML = '';
+    if(snap.empty){ el.innerHTML = '<p class="meta mono">لا يوجد طلبات حالياً</p>'; return; }
+    snap.forEach(d=>{
+      const a = d.data();
+      el.insertAdjacentHTML('beforeend', `
+        <div class="list-item">
+          <span>${a.name} ${a.tiktok?('— '+a.tiktok):''}<br><span class="meta">${a.message||''}</span></span>
+          <span>
+            <button class="del" data-col="applications" data-id="${d.id}">رفض/حذف</button>
+          </span>
+        </div>`);
+    });
+  }
+
+  document.body.addEventListener('click', async (e)=>{
+    if(e.target.classList.contains('del')){
+      const col = e.target.dataset.col;
+      const id = e.target.dataset.id;
+      await deleteDoc(doc(db,col,id));
+      loadAll();
+    }
+  });
+
+  document.getElementById('member-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    const data = {
+      name:f.name.value, role:f.role.value, meta:f.meta.value, order:Number(f.order.value)||0,
+      gameName:f.gameName.value, bio:f.bio.value, photo:f.photo.value
+    };
+    if(editingMemberId){
+      await updateDoc(doc(db,'members',editingMemberId), data);
+      editingMemberId = null;
+      f.querySelector('button[type="submit"]').textContent = 'إضافة عضو';
+      document.getElementById('cancel-edit-member').style.display = 'none';
+    }else{
+      await addDoc(collection(db,'members'), data);
+    }
+    f.reset(); loadAll();
+  });
+
+  document.getElementById('tiktok-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    const data = { name:f.name.value, handle:f.handle.value, url:f.url.value };
+    if(editingIds.tiktok){
+      await updateDoc(doc(db,'tiktok',editingIds.tiktok), data);
+      editingIds.tiktok = null;
+      f.querySelector('button[type="submit"]').textContent = 'إضافة حساب';
+      document.getElementById('cancel-edit-tiktok').style.display = 'none';
+    }else{
+      await addDoc(collection(db,'tiktok'), data);
+    }
+    f.reset(); loadAll();
+  });
+
+  document.getElementById('news-form').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const f = e.target;
+    const data = { title:f.title.value, tag:f.tag.value, date:f.date.value, body:f.body.value };
+    if(editingIds.news){
+      await updateDoc(doc(db,'news',editingIds.news), data);
+      editingIds.news = null;
+      f.querySelector('button[type="submit"]').textContent = 'نشر';
+      document.getElementById('cancel-edit-news').style.display = 'none';
+    }else{
+      await addDoc(collection(db,'news'), {...data, createdAt: serverTimestamp()});
+    }
+    f.reset(); loadAll();
+  });
+</script>
+</body>
+</html>
